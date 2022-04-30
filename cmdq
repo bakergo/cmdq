@@ -3,13 +3,13 @@ FIFO="$HOME/.cache/cmdq/cmdq.sock"
 LOCK="$HOME/.cache/cmdq/cmdq.lock"
 
 mkdir -p $(dirname "$FIFO")
-if  [! -p "$FIFO" ] ; then
+if  [ ! -p "$FIFO" ] ; then
   echo "Creating pipe at $FIFO"
   if [ -e "$FIFO" ] ; then
     echo "removing old $FIFO"
     rm "$FIFO"
   fi
-  mkfifo "$FIFO"
+  mkfifo -m 600 "$FIFO"
 fi
 
 echocmd() {
@@ -22,11 +22,32 @@ echocmd() {
   echo "command exited with $res"
   return $res
 }
-
-# Open the script as reader and writer of FIFO to keep xargs from receiving EOF
-exec 3<>"$FIFO"
 export -f echocmd
-xargs -r -a "$FIFO" -0 -I{} \
-  flock "$LOCK" \
-  bash -i -l -c 'echocmd "$@"' _ {}
+
+cmdq_server() {
+  # Open the script as reader and writer of FIFO to keep xargs from receiving EOF
+  exec 3<>"$FIFO"
+  xargs -r -a "$FIFO" -0 -I{} \
+    flock "$LOCK" \
+    bash -i -l -c 'echocmd "$@"' _ {}
+}
+
+cmdq_queue() {
+  flock "$LOCK" echo -en "cd $PWD ; $@\x0" >> $FIFO &
+}
+
+cmdq_queue_usage() {
+  echo "Usage: q [executable] [args...]"
+  echo "Usage: cmdq"
+  return
+}
+
+case "$(basename $0)" in
+  "cmdq") cmdq_server
+    ;;
+  "q") cmdq_queue "$@"
+    ;;
+  "*") cmdq_help
+    ;;
+esac
 
