@@ -1,6 +1,8 @@
 #!/bin/bash
-FIFO="$HOME/.cache/cmdq/cmdq.sock"
-LOCK="$HOME/.cache/cmdq/cmdq.lock"
+CONFIG_DIR="$HOME/.cache/cmdq"
+FIFO="$CONFIG_DIR/cmdq.sock"
+LOCK="$CONFIG_DIR/queue.lock"
+SERVER_LOCK="$CONFIG_DIR/cmdq.lock"
 
 mkdir -p $(dirname "$FIFO")
 if  [ ! -p "$FIFO" ] ; then
@@ -27,8 +29,9 @@ export -f echocmd
 cmdq_server() {
   # Open the script as reader and writer of FIFO to keep xargs from receiving EOF
   exec 3<>"$FIFO"
-  xargs -r -a "$FIFO" -0 -I{} \
-    bash -i -l -c 'echocmd "$@"' _ {}
+  flock -n "$SERVER_LOCK" xargs -r -a "$FIFO" -0 -I{} \
+      bash -i -l -c 'echocmd "$@"' _ {} \
+    || (echo "Multiple simultaneous servers not (yet) supported." ; exit 127)
 }
 
 cmdq_queue() {
