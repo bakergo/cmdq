@@ -1,0 +1,40 @@
+#!/bin/bash
+
+fifoopt=pipe
+FIFO="$HOME/.cache/cmdq/cmdq.sock"
+LOCK="$HOME/.cache/cmdq/cmdq.lock"
+
+mkdir -p $(dirname "$FIFO")
+if [ "$fifoopt" == "pipe" -a ! -p "$FIFO" ] ; then
+  echo "Creating pipe at $FIFO"
+  if [ -e "$FIFO" ] ; then
+    echo "removing old $FIFO"
+    rm "$FIFO"
+  fi
+  mkfifo "$FIFO"
+elif [ "$fifoopt" == "sock" -a ! -S "$FIFO" ] ; then
+  echo "Creating socket at $FIFO"
+  if [ -e "$FIFO" ] ; then
+    echo "removing old $FIFO"
+    rm "$FIFO"
+  fi
+  netcat -lkU "$FIFO"
+fi
+
+echocmd() {
+  if [ $# -lt 1 -o -z "$1" ] ; then
+    return
+  fi
+  echo "\$ $@"
+  bash -i -l -c "$@"
+  local res=$?
+  echo "command exited with $res"
+  return $res
+}
+export -f echocmd
+while true ; do
+  xargs -r -a "$FIFO" -0 -I{} \
+    flock "$LOCK" \
+    bash -i -l -c 'echocmd "$@"' _ {}
+done
+
