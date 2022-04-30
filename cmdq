@@ -28,7 +28,6 @@ cmdq_server() {
   # Open the script as reader and writer of FIFO to keep xargs from receiving EOF
   exec 3<>"$FIFO"
   xargs -r -a "$FIFO" -0 -I{} \
-    flock "$LOCK" \
     bash -i -l -c 'echocmd "$@"' _ {}
 }
 
